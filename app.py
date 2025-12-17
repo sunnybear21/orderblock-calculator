@@ -220,7 +220,20 @@ def main():
         layout="centered"
     )
 
-    st.title("📊 오더블록 계산기")
+    # Font Awesome CDN 추가
+    st.markdown("""
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .title-icon { font-size: 1.8rem; color: #1f77b4; }
+        .section-icon { font-size: 1.2rem; margin-right: 8px; }
+        .green { color: #28a745; }
+        .red { color: #dc3545; }
+        .blue { color: #1f77b4; }
+        .orange { color: #fd7e14; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<h1><i class="fa-solid fa-chart-line title-icon"></i> 오더블록 계산기</h1>', unsafe_allow_html=True)
     st.caption("손절가 / 익절구간 / 진입구간 자동 계산")
 
     # 검색 입력 (버튼 옆에 배치)
@@ -228,7 +241,7 @@ def main():
     with col1:
         search_input = st.text_input("종목명 또는 종목코드", placeholder="삼성전자 또는 005930", label_visibility="collapsed")
     with col2:
-        search_btn = st.button("🔍 분석", use_container_width=True)
+        search_btn = st.button("분석", use_container_width=True)
 
     st.caption("예: 삼성전자, SK하이닉스, 005930")
 
@@ -299,15 +312,15 @@ def main():
                 in_support = True
 
         if in_resistance:
-            st.warning("⚠️ **저항 구간 진입!** 신규 매수 비추천, 보유 중이면 익절 고려")
+            st.warning("**저항 구간 진입!** 신규 매수 비추천, 보유 중이면 익절 고려")
         elif in_support:
-            st.success("✅ **지지 구간!** 매수 타점, 손절가 설정 필수")
+            st.success("**지지 구간!** 매수 타점, 손절가 설정 필수")
         else:
-            st.info("💡 **중립 구간** 아래 오더블록 참고하여 매매 계획 수립")
+            st.info("**중립 구간** 아래 오더블록 참고하여 매매 계획 수립")
 
         # 진입 구간
         st.markdown("---")
-        st.subheader("📈 진입 구간 (상승 OB = 지지선)")
+        st.markdown('<h3><i class="fa-solid fa-arrow-trend-up section-icon green"></i>진입 구간 (상승 OB = 지지선)</h3>', unsafe_allow_html=True)
         if levels['entry_zones']:
             for ob in levels['entry_zones'][:5]:
                 dist = ((ob['top'] + ob['bottom'])/2 - current_price) / current_price * 100
@@ -320,7 +333,7 @@ def main():
 
         # 익절 구간
         st.markdown("---")
-        st.subheader("📉 익절 구간 (하락 OB = 저항선)")
+        st.markdown('<h3><i class="fa-solid fa-arrow-trend-down section-icon red"></i>익절 구간 (하락 OB = 저항선)</h3>', unsafe_allow_html=True)
         if levels['take_profit_zones']:
             for ob in levels['take_profit_zones'][:5]:
                 dist = ((ob['top'] + ob['bottom'])/2 - current_price) / current_price * 100
@@ -333,7 +346,7 @@ def main():
 
         # 매매 전략
         st.markdown("---")
-        st.subheader("💡 매매 전략")
+        st.markdown('<h3><i class="fa-solid fa-lightbulb section-icon orange"></i>매매 전략</h3>', unsafe_allow_html=True)
 
         strategy = []
         if levels['entry_zones']:
@@ -353,7 +366,7 @@ def main():
 
     # 푸터
     st.markdown("---")
-    st.caption("네이버 금융 데이터 기반 | API 키 불필요 | Made with ❤️")
+    st.caption("네이버 금융 데이터 기반 · API 키 불필요")
 
 
 if __name__ == "__main__":
