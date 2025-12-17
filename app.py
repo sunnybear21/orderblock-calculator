@@ -21,9 +21,11 @@ import re
 @st.cache_data(ttl=300)
 def search_stock_code(keyword: str) -> list:
     """종목명으로 종목코드 검색 (네이버 금융 검색 페이지 크롤링)"""
+    import urllib.parse
     try:
-        # 네이버 금융 검색 페이지
-        url = f"https://finance.naver.com/search/searchList.naver?query={keyword}"
+        # 한글 URL 인코딩 (euc-kr)
+        encoded_keyword = urllib.parse.quote(keyword, encoding='euc-kr')
+        url = f"https://finance.naver.com/search/searchList.naver?query={encoded_keyword}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.encoding = 'euc-kr'
@@ -105,7 +107,7 @@ def get_current_price_naver(stock_code: str) -> dict:
         url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
-        response.encoding = 'euc-kr'
+        response.encoding = 'utf-8'  # 메인 페이지는 utf-8
 
         soup = BeautifulSoup(response.text, 'html.parser')
         price_tag = soup.select_one('p.no_today span.blind')
