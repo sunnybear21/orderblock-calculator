@@ -354,7 +354,7 @@ def main():
 
     # 푸터
     st.markdown("---")
-    st.caption("네이버 금융 데이터 기반 · API 키 불필요")
+    st.caption("네이버 금융 데이터 기반 · Made by sunnybear")
 
 
 if __name__ == "__main__":
