@@ -238,34 +238,20 @@ def main():
     st.markdown('<h1><i class="fa-solid fa-chart-line title-icon"></i> 오더블록 계산기</h1>', unsafe_allow_html=True)
     st.caption("손절가 / 익절구간 / 진입구간 자동 계산")
 
-    # 검색 입력 (버튼 옆에 배치)
+    # 종목 코드 입력
     col1, col2 = st.columns([4, 1])
     with col1:
-        search_input = st.text_input("종목명 또는 종목코드", placeholder="삼성전자 또는 005930", label_visibility="collapsed")
+        stock_code = st.text_input("종목코드 6자리", placeholder="005930", label_visibility="collapsed", max_chars=6)
     with col2:
         search_btn = st.button("분석", use_container_width=True)
 
-    st.caption("예: 삼성전자, SK하이닉스, 005930")
+    st.caption("예: 005930(삼성전자), 000660(SK하이닉스), 035720(카카오)")
 
-    if search_input and search_btn:
-        # 종목코드 확인
-        if re.match(r'^\d{6}$', search_input):
-            stock_code = search_input
-        else:
-            results = search_stock_code(search_input)
-            if not results:
-                st.error("검색 결과가 없습니다.")
-                return
-            if len(results) == 1:
-                stock_code = results[0]['code']
-            else:
-                st.write("**검색 결과:**")
-                selected = st.selectbox(
-                    "종목 선택",
-                    options=results,
-                    format_func=lambda x: f"{x['name']} ({x['code']})"
-                )
-                stock_code = selected['code']
+    if stock_code and search_btn:
+        # 종목코드 유효성 체크
+        if not re.match(r'^\d{6}$', stock_code):
+            st.error("종목코드는 6자리 숫자입니다. (예: 005930)")
+            return
 
         with st.spinner("분석 중..."):
             # 데이터 조회
