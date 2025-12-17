@@ -20,20 +20,31 @@ import re
 
 @st.cache_data(ttl=300)
 def search_stock_code(keyword: str) -> list:
-    """종목명으로 종목코드 검색"""
+    """종목명으로 종목코드 검색 (네이버 금융 검색 페이지 크롤링)"""
     try:
-        url = f"https://ac.finance.naver.com/ac?q={keyword}&q_enc=euc-kr&st=111&frm=stock&r_format=json&r_enc=euc-kr&r_unicode=0&t_koreng=1"
-        response = requests.get(url, timeout=10)
-        data = response.json()
+        # 네이버 금융 검색 페이지
+        url = f"https://finance.naver.com/search/searchList.naver?query={keyword}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = 'euc-kr'
 
+        soup = BeautifulSoup(response.text, 'html.parser')
         results = []
-        if 'items' in data and len(data['items']) > 0:
-            for item in data['items'][0]:
-                code = item[0][0]
-                name = item[1][0]
-                results.append({'code': code, 'name': name})
+
+        # 검색 결과 테이블에서 종목 추출
+        links = soup.select('a.tltle')
+        for link in links[:10]:  # 상위 10개만
+            href = link.get('href', '')
+            name = link.text.strip()
+
+            # 종목코드 추출 (code=XXXXXX)
+            if 'code=' in href:
+                code = href.split('code=')[1].split('&')[0]
+                if len(code) == 6 and code.isdigit():
+                    results.append({'code': code, 'name': name})
+
         return results
-    except:
+    except Exception as e:
         return []
 
 
