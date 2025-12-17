@@ -223,12 +223,14 @@ def main():
     st.title("📊 오더블록 계산기")
     st.caption("손절가 / 익절구간 / 진입구간 자동 계산")
 
-    # 검색 입력
-    col1, col2 = st.columns([3, 1])
+    # 검색 입력 (버튼 옆에 배치)
+    col1, col2 = st.columns([4, 1])
     with col1:
-        search_input = st.text_input("종목명 또는 종목코드", placeholder="삼성전자 또는 005930")
+        search_input = st.text_input("종목명 또는 종목코드", placeholder="삼성전자 또는 005930", label_visibility="collapsed")
     with col2:
         search_btn = st.button("🔍 분석", use_container_width=True)
+
+    st.caption("예: 삼성전자, SK하이닉스, 005930")
 
     if search_input and search_btn:
         # 종목코드 확인
