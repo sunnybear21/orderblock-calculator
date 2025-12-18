@@ -190,40 +190,7 @@ def get_supply_data_naver(stock_code: str, days: int = 10) -> list:
 
 @st.cache_data(ttl=300)
 def get_detailed_supply_pykrx(stock_code: str, days: int = 7) -> list:
-    """pykrx로 투자자별 상세 수급 데이터 (연기금, 사모 포함)"""
-    # 방법 1: pykrx 시도
-    try:
-        from pykrx import stock
-
-        end_date = datetime.now().strftime('%Y%m%d')
-        start_date = (datetime.now() - timedelta(days=days + 5)).strftime('%Y%m%d')
-
-        df = stock.get_market_trading_volume_by_date(start_date, end_date, stock_code, detail=True)
-
-        if df is not None and not df.empty:
-            df = df.tail(days)
-            all_data = []
-            for idx, row in df.iterrows():
-                all_data.append({
-                    'date': idx.to_pydatetime() if hasattr(idx, 'to_pydatetime') else idx,
-                    'financial': int(row.get('금융투자', 0)),
-                    'insurance': int(row.get('보험', 0)),
-                    'invest_trust': int(row.get('투신', 0)),
-                    'private': int(row.get('사모', 0)),
-                    'bank': int(row.get('은행', 0)),
-                    'other_fin': int(row.get('기타금융', 0)),
-                    'pension': int(row.get('연기금', 0)),
-                    'corp': int(row.get('기타법인', 0)),
-                    'retail': int(row.get('개인', 0)),
-                    'foreign': int(row.get('외국인', 0)),
-                    'other_foreign': int(row.get('기타외국인', 0)),
-                })
-            if all_data:
-                return all_data
-    except:
-        pass
-
-    # 방법 2: KRX API 직접 호출 (fallback)
+    """KRX API로 투자자별 상세 수급 데이터 (연기금, 사모 포함)"""
     try:
         url = 'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd'
         headers = {
