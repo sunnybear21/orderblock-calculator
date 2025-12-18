@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 주식 분석 도구 - 단일 페이지 버전
-v1.3 - 연기금/사모 상세 수급 추가 (KRX API)
+v1.4 - 주도 테마 분석기 추가
 """
 
 import streamlit as st
@@ -381,9 +381,10 @@ def calculate_levels(current_price: float, order_blocks: list) -> dict:
 st.markdown('<h1><i class="fa-solid fa-chart-line" style="color: #1f77b4;"></i> 주식 분석 도구</h1>', unsafe_allow_html=True)
 
 # 탭으로 메뉴 구성
-tab1, tab2 = st.tabs([
+tab1, tab2, tab3 = st.tabs([
     "오더블록 계산기",
-    "수급 추적기"
+    "수급 추적기",
+    "주도 테마 분석"
 ])
 
 # ============================================================
@@ -833,3 +834,248 @@ with tab2:
 
     st.markdown("---")
     st.caption("네이버 금융 + KRX 데이터 기반 / 참고용")
+
+
+# ============================================================
+# 탭3: 주도 테마 분석
+# ============================================================
+with tab3:
+    st.markdown('<h3><i class="fa-solid fa-fire" style="color: #ff6b6b;"></i> 주도 테마 분석</h3>', unsafe_allow_html=True)
+    st.caption("테마별 출현 빈도, 모멘텀, 다음 주도 테마 예측")
+
+    # CSV 파일 업로드
+    uploaded_file = st.file_uploader("테마 데이터 CSV 업로드", type=['csv'], key="theme_csv")
+
+    if uploaded_file is not None:
+        try:
+            # CSV 읽기
+            df_theme = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+
+            # 컬럼명 정리
+            df_theme.columns = df_theme.columns.str.strip()
+
+            # 필수 컬럼 확인
+            required_cols = ['테마', '출현일수', '연속일(최대)', '현재연속', '거래대금(억)', '주도일수', '평균상승률']
+            if not all(col in df_theme.columns for col in required_cols):
+                st.error(f"필수 컬럼이 없습니다: {required_cols}")
+            else:
+                # 데이터 타입 변환
+                df_theme['출현일수'] = pd.to_numeric(df_theme['출현일수'], errors='coerce').fillna(0).astype(int)
+                df_theme['현재연속'] = pd.to_numeric(df_theme['현재연속'], errors='coerce').fillna(0).astype(int)
+                df_theme['거래대금(억)'] = pd.to_numeric(df_theme['거래대금(억)'], errors='coerce').fillna(0)
+                df_theme['주도일수'] = pd.to_numeric(df_theme['주도일수'], errors='coerce').fillna(0).astype(int)
+                df_theme['평균상승률'] = pd.to_numeric(df_theme['평균상승률'], errors='coerce').fillna(0)
+
+                # 주도력 계산 (주도일수 / 출현일수)
+                df_theme['주도력'] = df_theme.apply(
+                    lambda x: (x['주도일수'] / x['출현일수'] * 100) if x['출현일수'] > 0 else 0, axis=1
+                )
+
+                # 종합 점수 계산 (다음 주도 테마 예측용)
+                # 가중치: 현재연속(40%) + 거래대금정규화(30%) + 주도력(20%) + 평균상승률(10%)
+                max_volume = df_theme['거래대금(억)'].max() if df_theme['거래대금(억)'].max() > 0 else 1
+                max_consecutive = df_theme['현재연속'].max() if df_theme['현재연속'].max() > 0 else 1
+
+                df_theme['종합점수'] = (
+                    (df_theme['현재연속'] / max_consecutive * 40) +
+                    (df_theme['거래대금(억)'] / max_volume * 30) +
+                    (df_theme['주도력'] / 100 * 20) +
+                    (df_theme['평균상승률'] / 100 * 10)
+                )
+
+                st.markdown("---")
+
+                # 요약 통계
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("총 테마 수", f"{len(df_theme)}개")
+                col2.metric("현재 연속 중", f"{len(df_theme[df_theme['현재연속'] > 0])}개")
+                col3.metric("주도 테마", f"{len(df_theme[df_theme['주도일수'] > 0])}개")
+                col4.metric("총 거래대금", f"{df_theme['거래대금(억)'].sum():,.0f}억")
+
+                st.markdown("---")
+
+                # 1. 다음 주도 테마 예측 (종합점수 TOP 10)
+                st.markdown('<h4><i class="fa-solid fa-crystal-ball" style="color: #9b59b6;"></i> 다음 주도 테마 예측</h4>', unsafe_allow_html=True)
+                st.caption("현재연속 + 거래대금 + 주도력 + 상승률 종합 분석")
+
+                top_predicted = df_theme.nlargest(10, '종합점수')[['테마', '현재연속', '거래대금(억)', '주도력', '평균상승률', '종합점수']]
+
+                # 1위 강조
+                if len(top_predicted) > 0:
+                    top1 = top_predicted.iloc[0]
+                    st.markdown(f'''
+                    <div style="background: linear-gradient(135deg, #9b59b622, #9b59b611);
+                                border-left: 4px solid #9b59b6;
+                                padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4 style="margin:0; color:#9b59b6;">
+                            <i class="fa-solid fa-crown"></i> 1위: {top1['테마']}
+                        </h4>
+                        <p style="margin:8px 0 0 0; color:#aaa; font-size:14px;">
+                            연속 {top1['현재연속']}일 | 거래대금 {top1['거래대금(억)']:,.0f}억 | 주도력 {top1['주도력']:.1f}% | 상승률 {top1['평균상승률']:.1f}%
+                        </p>
+                    </div>
+                    ''', unsafe_allow_html=True)
+
+                # 테이블
+                st.dataframe(
+                    top_predicted.style.format({
+                        '거래대금(억)': '{:,.0f}',
+                        '주도력': '{:.1f}%',
+                        '평균상승률': '{:.1f}%',
+                        '종합점수': '{:.1f}'
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                st.markdown("---")
+
+                # 2. 현재 모멘텀 (연속일 TOP 10)
+                st.markdown('<h4><i class="fa-solid fa-bolt" style="color: #f39c12;"></i> 현재 모멘텀 TOP 10</h4>', unsafe_allow_html=True)
+                st.caption("현재 연속으로 출현 중인 테마")
+
+                top_momentum = df_theme[df_theme['현재연속'] > 0].nlargest(10, '현재연속')
+
+                if len(top_momentum) > 0:
+                    # 막대 차트
+                    chart_data = top_momentum.set_index('테마')['현재연속']
+                    st.bar_chart(chart_data, color='#f39c12')
+
+                    # 상세 테이블
+                    with st.expander("상세 보기"):
+                        st.dataframe(
+                            top_momentum[['테마', '현재연속', '출현일수', '거래대금(억)', '평균상승률']],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                else:
+                    st.info("현재 연속 출현 중인 테마가 없습니다.")
+
+                st.markdown("---")
+
+                # 3. 거래대금 TOP 10
+                st.markdown('<h4><i class="fa-solid fa-coins" style="color: #27ae60;"></i> 거래대금 TOP 10</h4>', unsafe_allow_html=True)
+                st.caption("돈이 몰리는 테마")
+
+                top_volume = df_theme.nlargest(10, '거래대금(억)')
+
+                # 막대 차트
+                chart_data_vol = top_volume.set_index('테마')['거래대금(억)']
+                st.bar_chart(chart_data_vol, color='#27ae60')
+
+                # 상세 테이블
+                with st.expander("상세 보기"):
+                    st.dataframe(
+                        top_volume[['테마', '거래대금(억)', '출현일수', '현재연속', '평균상승률']].style.format({
+                            '거래대금(억)': '{:,.0f}',
+                            '평균상승률': '{:.1f}%'
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                st.markdown("---")
+
+                # 4. 출현 빈도 TOP 10
+                st.markdown('<h4><i class="fa-solid fa-calendar-check" style="color: #3498db;"></i> 출현 빈도 TOP 10</h4>', unsafe_allow_html=True)
+                st.caption("자주 등장하는 테마")
+
+                top_frequency = df_theme.nlargest(10, '출현일수')
+
+                # 막대 차트
+                chart_data_freq = top_frequency.set_index('테마')['출현일수']
+                st.bar_chart(chart_data_freq, color='#3498db')
+
+                # 상세 테이블
+                with st.expander("상세 보기"):
+                    st.dataframe(
+                        top_frequency[['테마', '출현일수', '연속일(최대)', '주도일수', '평균상승률']],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                st.markdown("---")
+
+                # 5. 주도력 TOP 10 (출현 2일 이상)
+                st.markdown('<h4><i class="fa-solid fa-crown" style="color: #e74c3c;"></i> 주도력 TOP 10</h4>', unsafe_allow_html=True)
+                st.caption("출현 시 주도주가 되는 비율 (출현 2일 이상)")
+
+                top_leading = df_theme[df_theme['출현일수'] >= 2].nlargest(10, '주도력')
+
+                if len(top_leading) > 0:
+                    # 막대 차트
+                    chart_data_lead = top_leading.set_index('테마')['주도력']
+                    st.bar_chart(chart_data_lead, color='#e74c3c')
+
+                    # 상세 테이블
+                    with st.expander("상세 보기"):
+                        st.dataframe(
+                            top_leading[['테마', '주도력', '주도일수', '출현일수', '평균상승률']].style.format({
+                                '주도력': '{:.1f}%',
+                                '평균상승률': '{:.1f}%'
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                else:
+                    st.info("출현 2일 이상인 테마가 없습니다.")
+
+                st.markdown("---")
+
+                # 6. 평균상승률 TOP 10 (수익성)
+                st.markdown('<h4><i class="fa-solid fa-arrow-trend-up" style="color: #1abc9c;"></i> 평균상승률 TOP 10</h4>', unsafe_allow_html=True)
+                st.caption("수익성 높은 테마 (출현 2일 이상)")
+
+                top_return = df_theme[(df_theme['출현일수'] >= 2) & (df_theme['평균상승률'] > 0)].nlargest(10, '평균상승률')
+
+                if len(top_return) > 0:
+                    # 막대 차트
+                    chart_data_ret = top_return.set_index('테마')['평균상승률']
+                    st.bar_chart(chart_data_ret, color='#1abc9c')
+
+                    # 상세 테이블
+                    with st.expander("상세 보기"):
+                        st.dataframe(
+                            top_return[['테마', '평균상승률', '출현일수', '거래대금(억)']].style.format({
+                                '평균상승률': '{:.1f}%',
+                                '거래대금(억)': '{:,.0f}'
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                else:
+                    st.info("해당 조건의 테마가 없습니다.")
+
+                st.markdown("---")
+
+                # 7. 전체 데이터 보기
+                with st.expander("전체 데이터 보기"):
+                    st.dataframe(
+                        df_theme.sort_values('종합점수', ascending=False).style.format({
+                            '거래대금(억)': '{:,.0f}',
+                            '주도력': '{:.1f}%',
+                            '평균상승률': '{:.1f}%',
+                            '종합점수': '{:.1f}'
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+        except Exception as e:
+            st.error(f"파일 읽기 오류: {e}")
+
+    else:
+        st.info("CSV 파일을 업로드하면 테마 분석 결과를 볼 수 있습니다.")
+
+        st.markdown("""
+        **CSV 파일 형식:**
+        ```
+        테마,출현일수,연속일(최대),현재연속,총 종목수,거래대금(억),주도일수,평균상승률
+        로봇,8,5,5,33,68402,5,14.3
+        바이오,10,10,10,27,67375,5,14.2
+        ...
+        ```
+        """)
+
+    st.markdown("---")
+    st.caption("주도주 테마 데이터 기반 분석 / 참고용")
