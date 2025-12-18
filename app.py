@@ -839,26 +839,69 @@ with tab2:
 # ============================================================
 # 탭3: 주도 테마 분석
 # ============================================================
+
+# Google Sheets 자동 로드 함수
+@st.cache_data(ttl=300)  # 5분 캐시
+def load_theme_data_from_sheets():
+    """Google Sheets에서 주도테마 데이터 자동 로드"""
+    try:
+        # 시트 ID
+        sheet_id = "1BG_oNWSJtIgN3cYeNb5AZPsIgP__Ty-4eDgvjJwKg04"
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=0"
+
+        df = pd.read_csv(csv_url, encoding='utf-8')
+
+        # 컬럼명 정리
+        df.columns = df.columns.str.strip()
+
+        # 필수 컬럼 확인
+        required_cols = ['테마', '출현일수']
+        if not all(col in df.columns for col in required_cols):
+            return None, "시트에 필수 컬럼이 없습니다"
+
+        return df, None
+    except Exception as e:
+        return None, str(e)
+
 with tab3:
     st.markdown('<h3><i class="fa-solid fa-fire" style="color: #ff6b6b;"></i> 주도 테마 분석</h3>', unsafe_allow_html=True)
     st.caption("테마별 출현 빈도, 모멘텀, 다음 주도 테마 예측")
 
-    # CSV 파일 업로드
-    uploaded_file = st.file_uploader("테마 데이터 CSV 업로드", type=['csv'], key="theme_csv")
+    # 데이터 소스 선택
+    data_source = st.radio(
+        "데이터 소스",
+        ["Google Sheets (자동)", "CSV 업로드 (수동)"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
-    if uploaded_file is not None:
+    df_theme = None
+
+    if data_source == "Google Sheets (자동)":
+        with st.spinner("Google Sheets에서 데이터 로드 중..."):
+            df_theme, error = load_theme_data_from_sheets()
+
+        if error:
+            st.warning(f"시트 로드 실패: {error}")
+            st.info("시트에 데이터가 없거나 공유 설정을 확인해주세요.")
+        elif df_theme is not None and len(df_theme) > 0:
+            st.success(f"✅ {len(df_theme)}개 테마 데이터 로드 완료!")
+    else:
+        # CSV 파일 업로드
+        uploaded_file = st.file_uploader("테마 데이터 CSV 업로드", type=['csv'], key="theme_csv")
+        if uploaded_file is not None:
+            try:
+                df_theme = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+                df_theme.columns = df_theme.columns.str.strip()
+            except Exception as e:
+                st.error(f"파일 읽기 오류: {e}")
+
+    if df_theme is not None and len(df_theme) > 0:
         try:
-            # CSV 읽기
-            df_theme = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+            # 필수 컬럼 확인 (일부만 있어도 동작)
+            has_all_cols = all(col in df_theme.columns for col in ['테마', '출현일수', '연속일(최대)', '현재연속', '거래대금(억)', '주도일수', '평균상승률'])
 
-            # 컬럼명 정리
-            df_theme.columns = df_theme.columns.str.strip()
-
-            # 필수 컬럼 확인
-            required_cols = ['테마', '출현일수', '연속일(최대)', '현재연속', '거래대금(억)', '주도일수', '평균상승률']
-            if not all(col in df_theme.columns for col in required_cols):
-                st.error(f"필수 컬럼이 없습니다: {required_cols}")
-            else:
+            if has_all_cols:
                 # 데이터 타입 변환
                 df_theme['출현일수'] = pd.to_numeric(df_theme['출현일수'], errors='coerce').fillna(0).astype(int)
                 df_theme['현재연속'] = pd.to_numeric(df_theme['현재연속'], errors='coerce').fillna(0).astype(int)
@@ -1065,16 +1108,18 @@ with tab3:
             st.error(f"파일 읽기 오류: {e}")
 
     else:
-        st.info("CSV 파일을 업로드하면 테마 분석 결과를 볼 수 있습니다.")
+        st.info("데이터가 없습니다. Google Sheets에 데이터를 입력하거나 CSV를 업로드해주세요.")
 
         st.markdown("""
-        **CSV 파일 형식:**
+        **데이터 형식:**
         ```
         테마,출현일수,연속일(최대),현재연속,총 종목수,거래대금(억),주도일수,평균상승률
         로봇,8,5,5,33,68402,5,14.3
         바이오,10,10,10,27,67375,5,14.2
         ...
         ```
+
+        💡 **루시봇 연동 시** 매일 자동으로 데이터가 업데이트됩니다!
         """)
 
     st.markdown("---")
