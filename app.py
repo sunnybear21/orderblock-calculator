@@ -484,6 +484,21 @@ with tab2:
             else:
                 analysis = analyze_supply(supply_data)
 
+                # 연기금/사모/투신 상세 데이터 미리 가져오기 (종합 해석용)
+                detailed_data = get_detailed_supply_pykrx(supply_code, days=7)
+
+                # 상세 데이터 합계
+                if detailed_data:
+                    total_pension = sum(d['pension'] for d in detailed_data)
+                    total_private = sum(d['private'] for d in detailed_data)
+                    total_invest_trust = sum(d['invest_trust'] for d in detailed_data)
+                    total_financial = sum(d['financial'] for d in detailed_data)
+                else:
+                    total_pension = 0
+                    total_private = 0
+                    total_invest_trust = 0
+                    total_financial = 0
+
                 st.markdown("---")
                 st.subheader(f"{stock_info['name']} ({supply_code})")
 
@@ -512,9 +527,12 @@ with tab2:
 
                 # 해석 요약
                 st.markdown("---")
-                st.markdown('<h4><i class="fa-solid fa-lightbulb" style="color: #ffc107;"></i> 수급 해석</h4>', unsafe_allow_html=True)
+                st.markdown('<h4><i class="fa-solid fa-lightbulb" style="color: #ffc107;"></i> 종합 수급 해석</h4>', unsafe_allow_html=True)
 
                 total_smart = total_foreign + total_inst
+
+                # 종합 스마트머니 (연기금+사모+투신 포함)
+                total_all_smart = total_foreign + total_inst + total_pension + total_private + total_invest_trust
 
                 # 최근 추세 분석 (최근 3일 vs 이전 4일)
                 daily = analysis['daily_data']
@@ -527,8 +545,34 @@ with tab2:
                     prev_4 = 0
                     trend_turning = False
 
-                # 수급 판단
-                if total_smart > 0 and analysis['buy_days'] >= 5:
+                # 투자자별 방향 체크
+                foreign_buy = total_foreign > 0
+                inst_buy = total_inst > 0
+                pension_buy = total_pension > 0
+                private_buy = total_private > 0
+                trust_buy = total_invest_trust > 0
+
+                # 방향 일치 수 (매수 방향)
+                buy_count = sum([foreign_buy, inst_buy, pension_buy, private_buy, trust_buy])
+                sell_count = 5 - buy_count
+
+                # 종합 수급 판단 (연기금, 사모 등 포함)
+                if detailed_data and total_all_smart > 0 and buy_count >= 4:
+                    signal_text = "전방위 매집"
+                    signal_color = "#28a745"
+                    signal_icon = "fa-arrows-up-to-line"
+                    tip = "외국인+기관+연기금+사모 모두 매수 중! 강력한 상승 신호"
+                elif detailed_data and total_pension > 0 and total_smart > 0:
+                    signal_text = "장기 스마트머니 매집"
+                    signal_color = "#28a745"
+                    signal_icon = "fa-landmark"
+                    tip = "연기금(국민연금 등) + 외국인/기관 동반 매수. 장기 상승 기대"
+                elif detailed_data and total_pension > 0 and total_smart < 0:
+                    signal_text = "연기금 단독 매집"
+                    signal_color = "#17a2b8"
+                    signal_icon = "fa-landmark"
+                    tip = "연기금 매수 vs 외국인/기관 매도. 장기 관점에서 긍정적"
+                elif total_smart > 0 and analysis['buy_days'] >= 5:
                     signal_text = "강한 매집"
                     signal_color = "#28a745"
                     signal_icon = "fa-arrow-up"
@@ -538,6 +582,16 @@ with tab2:
                     signal_color = "#28a745"
                     signal_icon = "fa-arrow-up"
                     tip = "외국인+기관 순매수 우위. 상승 추세 지속 가능"
+                elif detailed_data and total_all_smart < 0 and sell_count >= 4:
+                    signal_text = "전방위 매도"
+                    signal_color = "#dc3545"
+                    signal_icon = "fa-arrows-down-to-line"
+                    tip = "외국인+기관+연기금+사모 모두 매도! 강력한 하락 신호"
+                elif detailed_data and total_pension < 0 and total_smart < 0:
+                    signal_text = "장기 자금 이탈"
+                    signal_color = "#dc3545"
+                    signal_icon = "fa-landmark"
+                    tip = "연기금까지 매도 중. 장기 하락 주의"
                 elif total_smart < 0 and analysis['sell_days'] >= 5:
                     signal_text = "강한 매도"
                     signal_color = "#dc3545"
@@ -574,6 +628,7 @@ with tab2:
                     signal_icon = "fa-minus"
                     tip = "뚜렷한 방향 없음. 추가 관찰 필요"
 
+                # 메인 신호 박스
                 st.markdown(f'''
                 <div style="background: linear-gradient(135deg, {signal_color}22, {signal_color}11);
                             border-left: 4px solid {signal_color};
@@ -585,10 +640,50 @@ with tab2:
                         {tip}
                     </p>
                     <p style="margin:8px 0 0 0; color:#888; font-size:12px;">
-                        7일 합계: {total_smart/10000:+,.1f}만주 | 순매수 {analysis['buy_days']}일 / 순매도 {analysis['sell_days']}일
+                        외국인+기관: {total_smart/10000:+,.1f}만주 | 순매수 {analysis['buy_days']}일 / 순매도 {analysis['sell_days']}일
                     </p>
                 </div>
                 ''', unsafe_allow_html=True)
+
+                # 투자자별 방향 요약 (상세 데이터 있을 때만)
+                if detailed_data:
+                    def get_direction_badge(is_buy, amount):
+                        if amount == 0:
+                            return '<span style="color:#6c757d;">중립</span>'
+                        color = "#28a745" if is_buy else "#dc3545"
+                        icon = "▲" if is_buy else "▼"
+                        return f'<span style="color:{color};">{icon}</span>'
+
+                    st.markdown(f'''
+                    <div style="background:#1a1a2e; padding:12px; border-radius:8px; margin:10px 0;">
+                        <div style="font-size:13px; color:#888; margin-bottom:8px;">투자자별 방향 (7일 합계)</div>
+                        <div style="display:flex; justify-content:space-around; flex-wrap:wrap; gap:8px;">
+                            <div style="text-align:center;">
+                                <div style="color:#aaa; font-size:11px;">외국인</div>
+                                <div>{get_direction_badge(foreign_buy, total_foreign)}</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="color:#aaa; font-size:11px;">기관</div>
+                                <div>{get_direction_badge(inst_buy, total_inst)}</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="color:#aaa; font-size:11px;">연기금</div>
+                                <div>{get_direction_badge(pension_buy, total_pension)}</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="color:#aaa; font-size:11px;">사모</div>
+                                <div>{get_direction_badge(private_buy, total_private)}</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="color:#aaa; font-size:11px;">투신</div>
+                                <div>{get_direction_badge(trust_buy, total_invest_trust)}</div>
+                            </div>
+                        </div>
+                        <div style="text-align:center; margin-top:10px; font-size:12px; color:#888;">
+                            매수 {buy_count}곳 / 매도 {sell_count}곳
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
 
                 # 외국인 vs 기관 비교
                 st.markdown("---")
@@ -669,14 +764,7 @@ with tab2:
                 st.markdown("---")
                 st.markdown('<h4><i class="fa-solid fa-building-columns" style="color: #9b59b6;"></i> 연기금 / 사모 상세</h4>', unsafe_allow_html=True)
 
-                detailed_data = get_detailed_supply_pykrx(supply_code, days=7)
-
                 if detailed_data:
-                    # 7일 합계 계산
-                    total_pension = sum(d['pension'] for d in detailed_data)
-                    total_private = sum(d['private'] for d in detailed_data)
-                    total_invest_trust = sum(d['invest_trust'] for d in detailed_data)
-
                     def fmt_num(n):
                         if abs(n) >= 10000:
                             return f"{n/10000:+,.1f}만주"
@@ -705,11 +793,41 @@ with tab2:
 
                     st.dataframe(detail_table, use_container_width=True, hide_index=True)
 
+                    # 투자자별 특성 해석
+                    st.markdown("##### 투자자별 해석")
+
+                    interpretations = []
+
                     # 연기금 해석
                     if total_pension > 0:
-                        st.success(f"연기금 7일 순매수 {fmt_num(total_pension)} - 국민연금 등 장기투자자 매집 신호")
+                        interpretations.append(f"✅ **연기금** 순매수 {fmt_num(total_pension)} - 국민연금 등 장기 투자자 매집 (장기 상승 기대)")
                     elif total_pension < 0:
-                        st.warning(f"연기금 7일 순매도 {fmt_num(total_pension)}")
+                        interpretations.append(f"⚠️ **연기금** 순매도 {fmt_num(total_pension)} - 장기 투자자 비중 축소")
+
+                    # 사모펀드 해석
+                    if total_private > 0:
+                        interpretations.append(f"✅ **사모펀드** 순매수 {fmt_num(total_private)} - 단기/중기 수익 기대하는 자금 유입")
+                    elif total_private < 0:
+                        interpretations.append(f"⚠️ **사모펀드** 순매도 {fmt_num(total_private)} - 차익실현 또는 리스크 회피")
+
+                    # 투신 해석
+                    if total_invest_trust > 0:
+                        interpretations.append(f"✅ **투신(펀드)** 순매수 {fmt_num(total_invest_trust)} - 펀드 자금 유입 중")
+                    elif total_invest_trust < 0:
+                        interpretations.append(f"⚠️ **투신(펀드)** 순매도 {fmt_num(total_invest_trust)} - 펀드 환매 또는 비중 축소")
+
+                    # 금융투자 해석
+                    if total_financial > 0:
+                        interpretations.append(f"✅ **금융투자** 순매수 {fmt_num(total_financial)} - 증권사 자기매매 매수")
+                    elif total_financial < 0:
+                        interpretations.append(f"⚠️ **금융투자** 순매도 {fmt_num(total_financial)} - 증권사 물량 정리")
+
+                    if interpretations:
+                        for interp in interpretations:
+                            st.markdown(interp)
+                    else:
+                        st.info("특이 동향 없음")
+
                 else:
                     st.info("연기금/사모 상세 데이터 없음 (해당 종목 미지원)")
 
