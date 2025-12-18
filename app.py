@@ -512,34 +512,67 @@ with tab2:
 
                 # 해석 요약
                 st.markdown("---")
+                st.markdown('<h4><i class="fa-solid fa-lightbulb" style="color: #ffc107;"></i> 수급 해석</h4>', unsafe_allow_html=True)
+
                 total_smart = total_foreign + total_inst
 
+                # 최근 추세 분석 (최근 3일 vs 이전 4일)
+                daily = analysis['daily_data']
+                if len(daily) >= 5:
+                    recent_3 = sum(d['smart_net'] for d in daily[:3])
+                    prev_4 = sum(d['smart_net'] for d in daily[3:])
+                    trend_turning = (recent_3 > 0 and prev_4 < 0) or (recent_3 < 0 and prev_4 > 0)
+                else:
+                    recent_3 = 0
+                    prev_4 = 0
+                    trend_turning = False
+
                 # 수급 판단
-                if total_smart > 0 and analysis['buy_days'] >= 4:
-                    signal = "accumulating"
+                if total_smart > 0 and analysis['buy_days'] >= 5:
+                    signal_text = "강한 매집"
+                    signal_color = "#28a745"
+                    signal_icon = "fa-arrow-up"
+                    tip = "스마트머니가 적극 매수 중. 단기 상승 가능성 높음"
+                elif total_smart > 0 and analysis['buy_days'] >= 4:
                     signal_text = "매집 중"
                     signal_color = "#28a745"
                     signal_icon = "fa-arrow-up"
-                elif total_smart < 0 and analysis['sell_days'] >= 4:
-                    signal = "distributing"
-                    signal_text = "물량 정리 중"
+                    tip = "외국인+기관 순매수 우위. 상승 추세 지속 가능"
+                elif total_smart < 0 and analysis['sell_days'] >= 5:
+                    signal_text = "강한 매도"
                     signal_color = "#dc3545"
                     signal_icon = "fa-arrow-down"
-                elif total_foreign > 0 and total_inst < 0:
-                    signal = "foreign_buy"
-                    signal_text = "외국인 매집 (기관 매도)"
+                    tip = "스마트머니 대량 이탈 중. 하락 주의"
+                elif total_smart < 0 and analysis['sell_days'] >= 4:
+                    signal_text = "물량 정리"
+                    signal_color = "#dc3545"
+                    signal_icon = "fa-arrow-down"
+                    tip = "외국인+기관 순매도 우위. 추가 하락 가능성"
+                elif trend_turning and recent_3 > 0:
+                    signal_text = "매수 전환"
                     signal_color = "#17a2b8"
-                    signal_icon = "fa-right-left"
-                elif total_foreign < 0 and total_inst > 0:
-                    signal = "inst_buy"
-                    signal_text = "기관 매집 (외국인 매도)"
+                    signal_icon = "fa-rotate"
+                    tip = "최근 3일 매수로 전환! 추세 변화 가능성"
+                elif trend_turning and recent_3 < 0:
+                    signal_text = "매도 전환"
                     signal_color = "#fd7e14"
-                    signal_icon = "fa-right-left"
+                    signal_icon = "fa-rotate"
+                    tip = "최근 3일 매도로 전환. 차익실현 또는 하락 전조"
+                elif total_foreign > 0 and total_inst < 0:
+                    signal_text = "외국인 주도"
+                    signal_color = "#17a2b8"
+                    signal_icon = "fa-globe"
+                    tip = "외국인 매수 vs 기관 매도. 외국인 방향 주시"
+                elif total_foreign < 0 and total_inst > 0:
+                    signal_text = "기관 주도"
+                    signal_color = "#fd7e14"
+                    signal_icon = "fa-building"
+                    tip = "기관 매수 vs 외국인 매도. 기관 방향 주시"
                 else:
-                    signal = "neutral"
-                    signal_text = "방향성 없음"
+                    signal_text = "관망"
                     signal_color = "#6c757d"
                     signal_icon = "fa-minus"
+                    tip = "뚜렷한 방향 없음. 추가 관찰 필요"
 
                 st.markdown(f'''
                 <div style="background: linear-gradient(135deg, {signal_color}22, {signal_color}11);
@@ -548,11 +581,54 @@ with tab2:
                     <h4 style="margin:0; color:{signal_color};">
                         <i class="fa-solid {signal_icon}"></i> {signal_text}
                     </h4>
-                    <p style="margin:8px 0 0 0; color:#ccc; font-size:14px;">
-                        7일간 외국인+기관 합계: {total_smart/10000:+,.1f}만주 / 순매수 {analysis['buy_days']}일
+                    <p style="margin:8px 0 0 0; color:#aaa; font-size:14px;">
+                        {tip}
+                    </p>
+                    <p style="margin:8px 0 0 0; color:#888; font-size:12px;">
+                        7일 합계: {total_smart/10000:+,.1f}만주 | 순매수 {analysis['buy_days']}일 / 순매도 {analysis['sell_days']}일
                     </p>
                 </div>
                 ''', unsafe_allow_html=True)
+
+                # 외국인 vs 기관 비교
+                st.markdown("---")
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    if total_foreign > 0:
+                        st.markdown(f'''
+                        <div style="background:#1a472a; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="color:#28a745; font-size:12px;">외국인</div>
+                            <div style="color:#28a745; font-size:18px; font-weight:bold;">매수 우위</div>
+                            <div style="color:#888; font-size:11px;">{total_foreign/10000:+,.1f}만주</div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'''
+                        <div style="background:#4a1a1a; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="color:#dc3545; font-size:12px;">외국인</div>
+                            <div style="color:#dc3545; font-size:18px; font-weight:bold;">매도 우위</div>
+                            <div style="color:#888; font-size:11px;">{total_foreign/10000:+,.1f}만주</div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+
+                with col2:
+                    if total_inst > 0:
+                        st.markdown(f'''
+                        <div style="background:#1a472a; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="color:#28a745; font-size:12px;">기관</div>
+                            <div style="color:#28a745; font-size:18px; font-weight:bold;">매수 우위</div>
+                            <div style="color:#888; font-size:11px;">{total_inst/10000:+,.1f}만주</div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'''
+                        <div style="background:#4a1a1a; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="color:#dc3545; font-size:12px;">기관</div>
+                            <div style="color:#dc3545; font-size:18px; font-weight:bold;">매도 우위</div>
+                            <div style="color:#888; font-size:11px;">{total_inst/10000:+,.1f}만주</div>
+                        </div>
+                        ''', unsafe_allow_html=True)
 
                 st.markdown("---")
 
