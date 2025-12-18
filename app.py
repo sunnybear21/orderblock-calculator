@@ -444,6 +444,50 @@ with tab2:
                 else:
                     col2.metric("기관 (7일)", f"{total_inst:+,}주")
 
+                # 해석 요약
+                st.markdown("---")
+                total_smart = total_foreign + total_inst
+
+                # 수급 판단
+                if total_smart > 0 and analysis['buy_days'] >= 4:
+                    signal = "accumulating"
+                    signal_text = "매집 중"
+                    signal_color = "#28a745"
+                    signal_icon = "fa-arrow-up"
+                elif total_smart < 0 and analysis['sell_days'] >= 4:
+                    signal = "distributing"
+                    signal_text = "물량 정리 중"
+                    signal_color = "#dc3545"
+                    signal_icon = "fa-arrow-down"
+                elif total_foreign > 0 and total_inst < 0:
+                    signal = "foreign_buy"
+                    signal_text = "외국인 매집 (기관 매도)"
+                    signal_color = "#17a2b8"
+                    signal_icon = "fa-right-left"
+                elif total_foreign < 0 and total_inst > 0:
+                    signal = "inst_buy"
+                    signal_text = "기관 매집 (외국인 매도)"
+                    signal_color = "#fd7e14"
+                    signal_icon = "fa-right-left"
+                else:
+                    signal = "neutral"
+                    signal_text = "방향성 없음"
+                    signal_color = "#6c757d"
+                    signal_icon = "fa-minus"
+
+                st.markdown(f'''
+                <div style="background: linear-gradient(135deg, {signal_color}22, {signal_color}11);
+                            border-left: 4px solid {signal_color};
+                            padding: 15px; border-radius: 8px; margin: 10px 0;">
+                    <h4 style="margin:0; color:{signal_color};">
+                        <i class="fa-solid {signal_icon}"></i> {signal_text}
+                    </h4>
+                    <p style="margin:8px 0 0 0; color:#ccc; font-size:14px;">
+                        7일간 외국인+기관 합계: {total_smart/10000:+,.1f}만주 / 순매수 {analysis['buy_days']}일
+                    </p>
+                </div>
+                ''', unsafe_allow_html=True)
+
                 st.markdown("---")
 
                 st.markdown('<h4><i class="fa-solid fa-calendar-days" style="color: #fd7e14;"></i> 일별 현황</h4>', unsafe_allow_html=True)
