@@ -12,6 +12,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import urllib.parse
 import re
+import plotly.express as px
 
 st.set_page_config(
     page_title="주식 분석 도구",
@@ -1030,9 +1031,17 @@ with tab3:
                 top_momentum = df_theme[df_theme['현재연속'] > 0].nlargest(10, '현재연속')
 
                 if len(top_momentum) > 0:
-                    # 막대 차트
-                    chart_data = top_momentum.set_index('테마')['현재연속']
-                    st.bar_chart(chart_data, color='#f39c12')
+                    # 막대 차트 (Plotly - x축 가로 표시)
+                    fig = px.bar(top_momentum, x='테마', y='현재연속',
+                                 color_discrete_sequence=['#f39c12'])
+                    fig.update_layout(
+                        xaxis_tickangle=0,
+                        xaxis_title='',
+                        yaxis_title='연속일',
+                        showlegend=False,
+                        height=300
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
                     # 상세 테이블
                     with st.expander("상세 보기"):
@@ -1052,9 +1061,17 @@ with tab3:
 
                 top_volume = df_theme.nlargest(10, '거래대금(억)')
 
-                # 막대 차트
-                chart_data_vol = top_volume.set_index('테마')['거래대금(억)']
-                st.bar_chart(chart_data_vol, color='#27ae60')
+                # 막대 차트 (Plotly - x축 가로 표시)
+                fig_vol = px.bar(top_volume, x='테마', y='거래대금(억)',
+                                 color_discrete_sequence=['#27ae60'])
+                fig_vol.update_layout(
+                    xaxis_tickangle=0,
+                    xaxis_title='',
+                    yaxis_title='거래대금(억)',
+                    showlegend=False,
+                    height=300
+                )
+                st.plotly_chart(fig_vol, use_container_width=True)
 
                 # 상세 테이블
                 with st.expander("상세 보기"):
@@ -1075,9 +1092,17 @@ with tab3:
 
                 top_frequency = df_theme.nlargest(10, '출현일수')
 
-                # 막대 차트
-                chart_data_freq = top_frequency.set_index('테마')['출현일수']
-                st.bar_chart(chart_data_freq, color='#3498db')
+                # 막대 차트 (Plotly - x축 가로 표시)
+                fig_freq = px.bar(top_frequency, x='테마', y='출현일수',
+                                  color_discrete_sequence=['#3498db'])
+                fig_freq.update_layout(
+                    xaxis_tickangle=0,
+                    xaxis_title='',
+                    yaxis_title='출현일수',
+                    showlegend=False,
+                    height=300
+                )
+                st.plotly_chart(fig_freq, use_container_width=True)
 
                 # 상세 테이블
                 with st.expander("상세 보기"):
@@ -1096,9 +1121,17 @@ with tab3:
                 top_leading = df_theme[df_theme['출현일수'] >= 2].nlargest(10, '주도력')
 
                 if len(top_leading) > 0:
-                    # 막대 차트
-                    chart_data_lead = top_leading.set_index('테마')['주도력']
-                    st.bar_chart(chart_data_lead, color='#e74c3c')
+                    # 막대 차트 (Plotly - x축 가로 표시)
+                    fig_lead = px.bar(top_leading, x='테마', y='주도력',
+                                      color_discrete_sequence=['#e74c3c'])
+                    fig_lead.update_layout(
+                        xaxis_tickangle=0,
+                        xaxis_title='',
+                        yaxis_title='주도력(%)',
+                        showlegend=False,
+                        height=300
+                    )
+                    st.plotly_chart(fig_lead, use_container_width=True)
 
                     # 상세 테이블
                     with st.expander("상세 보기"):
@@ -1122,9 +1155,17 @@ with tab3:
                 top_return = df_theme[(df_theme['출현일수'] >= 2) & (df_theme['평균상승률'] > 0)].nlargest(10, '평균상승률')
 
                 if len(top_return) > 0:
-                    # 막대 차트
-                    chart_data_ret = top_return.set_index('테마')['평균상승률']
-                    st.bar_chart(chart_data_ret, color='#1abc9c')
+                    # 막대 차트 (Plotly - x축 가로 표시)
+                    fig_ret = px.bar(top_return, x='테마', y='평균상승률',
+                                     color_discrete_sequence=['#1abc9c'])
+                    fig_ret.update_layout(
+                        xaxis_tickangle=0,
+                        xaxis_title='',
+                        yaxis_title='평균상승률(%)',
+                        showlegend=False,
+                        height=300
+                    )
+                    st.plotly_chart(fig_ret, use_container_width=True)
 
                     # 상세 테이블
                     with st.expander("상세 보기"):
