@@ -149,14 +149,16 @@ def get_supply_data_naver(stock_code: str, days: int = 10) -> list:
             response.encoding = 'euc-kr'
 
             soup = BeautifulSoup(response.text, 'html.parser')
-            table = soup.find('table', class_='type2')
-            if not table:
+            # 두 번째 type2 테이블 사용
+            tables = soup.find_all('table', class_='type2')
+            if len(tables) < 2:
                 break
+            table = tables[1]
 
             rows = table.find_all('tr')
             for row in rows:
                 cols = row.find_all('td')
-                if len(cols) >= 6:
+                if len(cols) >= 7:
                     date_text = cols[0].text.strip()
                     if not date_text or '.' not in date_text:
                         continue
@@ -164,12 +166,12 @@ def get_supply_data_naver(stock_code: str, days: int = 10) -> list:
                         # 날짜
                         date = datetime.strptime(date_text, '%Y.%m.%d')
 
-                        # 기관 순매매 (4번째 컬럼)
-                        inst_text = cols[4].text.strip().replace(',', '').replace('+', '')
+                        # 기관 순매매 (컬럼 5)
+                        inst_text = cols[5].text.strip().replace(',', '').replace('+', '')
                         inst = int(inst_text) if inst_text and inst_text != '-' else 0
 
-                        # 외국인 순매매 (5번째 컬럼)
-                        foreign_text = cols[5].text.strip().replace(',', '').replace('+', '')
+                        # 외국인 순매매 (컬럼 6)
+                        foreign_text = cols[6].text.strip().replace(',', '').replace('+', '')
                         foreign = int(foreign_text) if foreign_text and foreign_text != '-' else 0
 
                         all_data.append({
