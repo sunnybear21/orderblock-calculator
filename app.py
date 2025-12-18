@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 주식 분석 도구 - 단일 페이지 버전
-v1.2 - 네이버 금융 기반 (pykrx 제거)
+v1.3 - 연기금/사모 상세 수급 추가 (KRX API)
 """
 
 import streamlit as st
@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import urllib.parse
 import re
 
@@ -184,6 +184,75 @@ def get_supply_data_naver(stock_code: str, days: int = 10) -> list:
             page += 1
 
         return all_data[:days]
+    except:
+        return []
+
+
+@st.cache_data(ttl=300)
+def get_detailed_supply_krx(stock_code: str, days: int = 7) -> list:
+    """KRX API에서 투자자별 상세 수급 데이터 (연기금, 사모 포함)"""
+    try:
+        url = 'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd'
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Referer': 'http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020302'
+        }
+
+        end_date = datetime.now().strftime('%Y%m%d')
+        start_date = (datetime.now() - timedelta(days=days + 5)).strftime('%Y%m%d')
+
+        # KRX 종목코드 (KR7 + 종목코드 + 003)
+        krx_code = f'KR7{stock_code}003'
+
+        data = {
+            'bld': 'dbms/MDC/STAT/standard/MDCSTAT02303',
+            'locale': 'ko_KR',
+            'inqTpCd': '2',
+            'trdVolVal': '1',  # 거래량 (주식수)
+            'askBid': '3',  # 순매수
+            'strtDd': start_date,
+            'endDd': end_date,
+            'isuCd': krx_code,
+            'isuCd2': stock_code,
+            'share': '1',
+            'money': '1',
+            'csvxls_is498': 'false'
+        }
+
+        response = requests.post(url, headers=headers, data=data, timeout=15)
+        result = response.json()
+
+        if 'output' not in result or not result['output']:
+            return []
+
+        # 컬럼 매핑: TRDVAL1~11
+        # 1:금융투자, 2:보험, 3:투신, 4:사모, 5:은행, 6:기타금융, 7:연기금, 8:기타법인, 9:개인, 10:외국인, 11:기타외국인
+        all_data = []
+        for row in result['output'][:days]:
+            def parse_val(v):
+                try:
+                    return int(v.replace(',', '').replace('+', ''))
+                except:
+                    return 0
+
+            all_data.append({
+                'date': datetime.strptime(row['TRD_DD'], '%Y/%m/%d'),
+                'financial': parse_val(row.get('TRDVAL1', '0')),  # 금융투자
+                'insurance': parse_val(row.get('TRDVAL2', '0')),  # 보험
+                'invest_trust': parse_val(row.get('TRDVAL3', '0')),  # 투신
+                'private': parse_val(row.get('TRDVAL4', '0')),  # 사모
+                'bank': parse_val(row.get('TRDVAL5', '0')),  # 은행
+                'other_fin': parse_val(row.get('TRDVAL6', '0')),  # 기타금융
+                'pension': parse_val(row.get('TRDVAL7', '0')),  # 연기금
+                'corp': parse_val(row.get('TRDVAL8', '0')),  # 기타법인
+                'retail': parse_val(row.get('TRDVAL9', '0')),  # 개인
+                'foreign': parse_val(row.get('TRDVAL10', '0')),  # 외국인
+                'other_foreign': parse_val(row.get('TRDVAL11', '0')),  # 기타외국인
+            })
+
+        return all_data
     except:
         return []
 
@@ -523,5 +592,53 @@ with tab2:
 
                 st.dataframe(table_data, use_container_width=True, hide_index=True)
 
+                # 연기금/사모 상세 데이터 (KRX)
+                st.markdown("---")
+                st.markdown('<h4><i class="fa-solid fa-building-columns" style="color: #9b59b6;"></i> 연기금 / 사모 상세</h4>', unsafe_allow_html=True)
+
+                detailed_data = get_detailed_supply_krx(supply_code, days=7)
+
+                if detailed_data:
+                    # 7일 합계 계산
+                    total_pension = sum(d['pension'] for d in detailed_data)
+                    total_private = sum(d['private'] for d in detailed_data)
+                    total_invest_trust = sum(d['invest_trust'] for d in detailed_data)
+
+                    def fmt_num(n):
+                        if abs(n) >= 10000:
+                            return f"{n/10000:+,.1f}만주"
+                        return f"{n:+,}주"
+
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("연기금 (7일)", fmt_num(total_pension))
+                    col2.metric("사모펀드 (7일)", fmt_num(total_private))
+                    col3.metric("투신 (7일)", fmt_num(total_invest_trust))
+
+                    # 상세 테이블
+                    detail_table = []
+                    for d in detailed_data:
+                        def fmt_short(n):
+                            if abs(n) >= 10000:
+                                return f"{n/10000:+,.1f}만"
+                            return f"{n:+,}"
+
+                        detail_table.append({
+                            '날짜': d['date'].strftime('%m/%d'),
+                            '연기금': fmt_short(d['pension']),
+                            '사모': fmt_short(d['private']),
+                            '투신': fmt_short(d['invest_trust']),
+                            '금융투자': fmt_short(d['financial']),
+                        })
+
+                    st.dataframe(detail_table, use_container_width=True, hide_index=True)
+
+                    # 연기금 해석
+                    if total_pension > 0:
+                        st.success(f"연기금 7일 순매수 {fmt_num(total_pension)} - 국민연금 등 장기투자자 매집 신호")
+                    elif total_pension < 0:
+                        st.warning(f"연기금 7일 순매도 {fmt_num(total_pension)}")
+                else:
+                    st.info("KRX 상세 데이터 조회 실패")
+
     st.markdown("---")
-    st.caption("네이버 금융 데이터 기반 / 참고용")
+    st.caption("네이버 금융 + KRX 데이터 기반 / 참고용")
