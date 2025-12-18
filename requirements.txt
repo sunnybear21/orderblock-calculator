@@ -4,4 +4,3 @@ beautifulsoup4>=4.12.0
 pandas>=1.5.0
 numpy>=1.23.0
 lxml>=4.9.0
-pykrx>=1.0.0

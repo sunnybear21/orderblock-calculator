@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 주식 분석 도구 - 단일 페이지 버전
-v1.1 - pykrx 수급 추적 지원
+v1.2 - 네이버 금융 기반 (pykrx 제거)
 """
 
 import streamlit as st
@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import urllib.parse
 import re
 
@@ -23,12 +23,6 @@ st.set_page_config(
 st.markdown("""
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 """, unsafe_allow_html=True)
-
-try:
-    from pykrx import stock
-    PYKRX_AVAILABLE = True
-except ImportError:
-    PYKRX_AVAILABLE = False
 
 
 # ============================================================
@@ -141,22 +135,89 @@ def get_daily_candle_naver(stock_code: str, days: int = 60) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300)
-def get_supply_data(stock_code: str, days: int = 10) -> pd.DataFrame:
-    if not PYKRX_AVAILABLE:
-        return pd.DataFrame()
-
+def get_supply_data_naver(stock_code: str, days: int = 10) -> list:
+    """네이버 금융에서 외국인/기관 수급 데이터 스크래핑"""
     try:
-        end_date = datetime.now().strftime('%Y%m%d')
-        start_date = (datetime.now() - timedelta(days=days + 10)).strftime('%Y%m%d')
+        url = f"https://finance.naver.com/item/frgn.naver?code={stock_code}"
+        all_data = []
+        page = 1
 
-        df = stock.get_market_trading_value_by_date(start_date, end_date, stock_code)
+        while len(all_data) < days and page <= 3:
+            page_url = f"{url}&page={page}"
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            response = requests.get(page_url, headers=headers, timeout=10)
+            response.encoding = 'euc-kr'
 
-        if df is None or df.empty:
-            return pd.DataFrame()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            table = soup.find('table', class_='type2')
+            if not table:
+                break
 
-        return df.tail(days)
+            rows = table.find_all('tr')
+            for row in rows:
+                cols = row.find_all('td')
+                if len(cols) >= 6:
+                    date_text = cols[0].text.strip()
+                    if not date_text or '.' not in date_text:
+                        continue
+                    try:
+                        # 날짜
+                        date = datetime.strptime(date_text, '%Y.%m.%d')
+
+                        # 기관 순매매 (4번째 컬럼)
+                        inst_text = cols[4].text.strip().replace(',', '').replace('+', '')
+                        inst = int(inst_text) if inst_text and inst_text != '-' else 0
+
+                        # 외국인 순매매 (5번째 컬럼)
+                        foreign_text = cols[5].text.strip().replace(',', '').replace('+', '')
+                        foreign = int(foreign_text) if foreign_text and foreign_text != '-' else 0
+
+                        all_data.append({
+                            'date': date,
+                            'foreign': foreign,
+                            'inst': inst
+                        })
+                    except:
+                        continue
+            page += 1
+
+        return all_data[:days]
     except:
-        return pd.DataFrame()
+        return []
+
+
+def analyze_supply(data: list) -> dict:
+    """수급 데이터 분석"""
+    if not data:
+        return {'daily_data': [], 'total_foreign': 0, 'total_inst': 0, 'buy_days': 0, 'sell_days': 0}
+
+    daily_data = []
+    for row in data:
+        date_str = row['date'].strftime('%m/%d')
+        foreign = row['foreign']
+        inst = row['inst']
+        smart_net = foreign + inst
+
+        daily_data.append({
+            'date': date_str,
+            'foreign': foreign,
+            'inst': inst,
+            'smart_net': smart_net,
+            'is_buy': smart_net > 0
+        })
+
+    total_foreign = sum(d['foreign'] for d in daily_data)
+    total_inst = sum(d['inst'] for d in daily_data)
+    buy_days = sum(1 for d in daily_data if d['is_buy'])
+    sell_days = len(daily_data) - buy_days
+
+    return {
+        'daily_data': daily_data,
+        'total_foreign': total_foreign,
+        'total_inst': total_inst,
+        'buy_days': buy_days,
+        'sell_days': sell_days
+    }
 
 
 # ============================================================
@@ -246,44 +307,6 @@ def calculate_levels(current_price: float, order_blocks: list) -> dict:
 
 
 # ============================================================
-# 수급 함수
-# ============================================================
-
-def analyze_supply(df: pd.DataFrame) -> dict:
-    if df is None or df.empty:
-        return {'daily_data': [], 'total_foreign': 0, 'total_inst': 0, 'buy_days': 0, 'sell_days': 0}
-
-    daily_data = []
-    for idx, row in df.iterrows():
-        date_str = idx.strftime('%m/%d') if hasattr(idx, 'strftime') else str(idx)
-
-        foreign = row.get('외국인합계', row.get('외국인', 0))
-        inst = row.get('기관합계', 0)
-        smart_net = foreign + inst
-
-        daily_data.append({
-            'date': date_str,
-            'foreign': foreign,
-            'inst': inst,
-            'smart_net': smart_net,
-            'is_buy': smart_net > 0
-        })
-
-    total_foreign = sum(d['foreign'] for d in daily_data)
-    total_inst = sum(d['inst'] for d in daily_data)
-    buy_days = sum(1 for d in daily_data if d['is_buy'])
-    sell_days = len(daily_data) - buy_days
-
-    return {
-        'daily_data': daily_data,
-        'total_foreign': total_foreign,
-        'total_inst': total_inst,
-        'buy_days': buy_days,
-        'sell_days': sell_days
-    }
-
-
-# ============================================================
 # 메인 UI
 # ============================================================
 
@@ -366,70 +389,93 @@ with tab2:
     st.markdown('<h3><i class="fa-solid fa-coins" style="color: #28a745;"></i> 수급 추적기</h3>', unsafe_allow_html=True)
     st.caption("외국인/기관 매매 현황 조회")
 
-    if not PYKRX_AVAILABLE:
-        st.error("pykrx 모듈 필요: pip install pykrx")
-    else:
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            supply_input = st.text_input("종목코드 또는 종목명", placeholder="005930 또는 삼성전자", label_visibility="collapsed", key="supply_input")
-        with col2:
-            supply_btn = st.button("조회", use_container_width=True, key="supply_btn")
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        supply_input = st.text_input("종목코드 또는 종목명", placeholder="005930 또는 삼성전자", label_visibility="collapsed", key="supply_input")
+    with col2:
+        supply_btn = st.button("조회", use_container_width=True, key="supply_btn")
 
-        supply_code = None
-        if supply_input and not supply_input.isdigit():
-            results = search_stock_code(supply_input)
-            if results:
-                options = [f"{r['name']} ({r['code']})" for r in results]
-                selected = st.selectbox("검색 결과", options, key="supply_select")
-                if selected:
-                    supply_code = selected.split('(')[1].replace(')', '')
-        elif supply_input and len(supply_input) == 6:
-            supply_code = supply_input
+    supply_code = None
+    if supply_input and not supply_input.isdigit():
+        results = search_stock_code(supply_input)
+        if results:
+            options = [f"{r['name']} ({r['code']})" for r in results]
+            selected = st.selectbox("검색 결과", options, key="supply_select")
+            if selected:
+                supply_code = selected.split('(')[1].replace(')', '')
+    elif supply_input and len(supply_input) == 6:
+        supply_code = supply_input
 
-        if supply_code and supply_btn:
-            with st.spinner("조회 중..."):
-                stock_info = get_stock_info_naver(supply_code)
-                supply_df = get_supply_data(supply_code, days=7)
+    if supply_code and supply_btn:
+        with st.spinner("조회 중..."):
+            stock_info = get_stock_info_naver(supply_code)
+            supply_data = get_supply_data_naver(supply_code, days=7)
 
-                if supply_df.empty:
-                    st.error("데이터 없음")
+            if not supply_data:
+                st.error("데이터 없음")
+            else:
+                analysis = analyze_supply(supply_data)
+
+                st.markdown("---")
+                st.subheader(f"{stock_info['name']} ({supply_code})")
+
+                col1, col2, col3 = st.columns(3)
+                col1.metric("현재가", f"{stock_info['price']:,}원", f"{stock_info['change_pct']:+.1f}%")
+                col2.metric("순매수일", f"{analysis['buy_days']}일")
+                col3.metric("순매도일", f"{analysis['sell_days']}일")
+
+                st.markdown("---")
+
+                col1, col2 = st.columns(2)
+                # 주식수 기준이므로 억 단위로 변환하지 않음
+                total_foreign = analysis['total_foreign']
+                total_inst = analysis['total_inst']
+
+                # 만주 단위로 표시
+                if abs(total_foreign) >= 10000:
+                    col1.metric("외국인 (7일)", f"{total_foreign/10000:+,.1f}만주")
                 else:
-                    analysis = analyze_supply(supply_df)
+                    col1.metric("외국인 (7일)", f"{total_foreign:+,}주")
 
-                    st.markdown("---")
-                    st.subheader(f"{stock_info['name']} ({supply_code})")
+                if abs(total_inst) >= 10000:
+                    col2.metric("기관 (7일)", f"{total_inst/10000:+,.1f}만주")
+                else:
+                    col2.metric("기관 (7일)", f"{total_inst:+,}주")
 
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("현재가", f"{stock_info['price']:,}원", f"{stock_info['change_pct']:+.1f}%")
-                    col2.metric("순매수일", f"{analysis['buy_days']}일")
-                    col3.metric("순매도일", f"{analysis['sell_days']}일")
+                st.markdown("---")
 
-                    st.markdown("---")
+                st.markdown('<h4><i class="fa-solid fa-calendar-days" style="color: #fd7e14;"></i> 일별 현황</h4>', unsafe_allow_html=True)
 
-                    col1, col2 = st.columns(2)
-                    foreign_bil = analysis['total_foreign'] / 1e8
-                    inst_bil = analysis['total_inst'] / 1e8
+                table_data = []
+                for d in analysis['daily_data']:
+                    foreign = d['foreign']
+                    inst = d['inst']
+                    total = d['smart_net']
 
-                    col1.metric("외국인 (7일)", f"{foreign_bil:+,.1f}억")
-                    col2.metric("기관 (7일)", f"{inst_bil:+,.1f}억")
+                    # 만주 단위 또는 주 단위
+                    if abs(foreign) >= 10000:
+                        f_str = f"{foreign/10000:+,.1f}만"
+                    else:
+                        f_str = f"{foreign:+,}"
 
-                    st.markdown("---")
+                    if abs(inst) >= 10000:
+                        i_str = f"{inst/10000:+,.1f}만"
+                    else:
+                        i_str = f"{inst:+,}"
 
-                    st.markdown('<h4><i class="fa-solid fa-calendar-days" style="color: #fd7e14;"></i> 일별 현황</h4>', unsafe_allow_html=True)
+                    if abs(total) >= 10000:
+                        t_str = f"{total/10000:+,.1f}만"
+                    else:
+                        t_str = f"{total:+,}"
 
-                    table_data = []
-                    for d in reversed(analysis['daily_data']):
-                        f_bil = d['foreign'] / 1e8
-                        i_bil = d['inst'] / 1e8
-                        total = d['smart_net'] / 1e8
-                        table_data.append({
-                            '날짜': d['date'],
-                            '외국인': f"{f_bil:+,.1f}억",
-                            '기관': f"{i_bil:+,.1f}억",
-                            '합계': f"{total:+,.1f}억"
-                        })
+                    table_data.append({
+                        '날짜': d['date'],
+                        '외국인': f_str,
+                        '기관': i_str,
+                        '합계': t_str
+                    })
 
-                    st.dataframe(table_data, use_container_width=True, hide_index=True)
+                st.dataframe(table_data, use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        st.caption("pykrx 데이터 기반 / 참고용")
+    st.markdown("---")
+    st.caption("네이버 금융 데이터 기반 / 참고용")
