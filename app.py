@@ -191,40 +191,100 @@ def get_supply_data_naver(stock_code: str, days: int = 10) -> list:
 @st.cache_data(ttl=300)
 def get_detailed_supply_pykrx(stock_code: str, days: int = 7) -> list:
     """pykrx로 투자자별 상세 수급 데이터 (연기금, 사모 포함)"""
+    # 방법 1: pykrx 시도
     try:
         from pykrx import stock
 
         end_date = datetime.now().strftime('%Y%m%d')
         start_date = (datetime.now() - timedelta(days=days + 5)).strftime('%Y%m%d')
 
-        # detail=True로 상세 투자자 데이터 조회
         df = stock.get_market_trading_volume_by_date(start_date, end_date, stock_code, detail=True)
 
-        if df is None or df.empty:
-            return []
-
-        df = df.tail(days)
-
-        all_data = []
-        for idx, row in df.iterrows():
-            all_data.append({
-                'date': idx.to_pydatetime() if hasattr(idx, 'to_pydatetime') else idx,
-                'financial': int(row.get('금융투자', 0)),
-                'insurance': int(row.get('보험', 0)),
-                'invest_trust': int(row.get('투신', 0)),
-                'private': int(row.get('사모', 0)),
-                'bank': int(row.get('은행', 0)),
-                'other_fin': int(row.get('기타금융', 0)),
-                'pension': int(row.get('연기금', 0)),
-                'corp': int(row.get('기타법인', 0)),
-                'retail': int(row.get('개인', 0)),
-                'foreign': int(row.get('외국인', 0)),
-                'other_foreign': int(row.get('기타외국인', 0)),
-            })
-
-        return all_data
+        if df is not None and not df.empty:
+            df = df.tail(days)
+            all_data = []
+            for idx, row in df.iterrows():
+                all_data.append({
+                    'date': idx.to_pydatetime() if hasattr(idx, 'to_pydatetime') else idx,
+                    'financial': int(row.get('금융투자', 0)),
+                    'insurance': int(row.get('보험', 0)),
+                    'invest_trust': int(row.get('투신', 0)),
+                    'private': int(row.get('사모', 0)),
+                    'bank': int(row.get('은행', 0)),
+                    'other_fin': int(row.get('기타금융', 0)),
+                    'pension': int(row.get('연기금', 0)),
+                    'corp': int(row.get('기타법인', 0)),
+                    'retail': int(row.get('개인', 0)),
+                    'foreign': int(row.get('외국인', 0)),
+                    'other_foreign': int(row.get('기타외국인', 0)),
+                })
+            if all_data:
+                return all_data
     except:
-        return []
+        pass
+
+    # 방법 2: KRX API 직접 호출 (fallback)
+    try:
+        url = 'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd'
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Referer': 'http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020302'
+        }
+
+        end_date = datetime.now().strftime('%Y%m%d')
+        start_date = (datetime.now() - timedelta(days=days + 5)).strftime('%Y%m%d')
+
+        # 여러 ISIN 형식 시도
+        for suffix in ['003', '000', '001', '002', '004', '005', '006']:
+            krx_code = f'KR7{stock_code}{suffix}'
+
+            data = {
+                'bld': 'dbms/MDC/STAT/standard/MDCSTAT02303',
+                'locale': 'ko_KR',
+                'inqTpCd': '2',
+                'trdVolVal': '1',
+                'askBid': '3',
+                'strtDd': start_date,
+                'endDd': end_date,
+                'isuCd': krx_code,
+                'isuCd2': stock_code,
+                'share': '1',
+                'money': '1',
+                'csvxls_is498': 'false'
+            }
+
+            response = requests.post(url, headers=headers, data=data, timeout=10)
+            result = response.json()
+
+            if 'output' in result and result['output']:
+                all_data = []
+                for row in result['output'][:days]:
+                    def parse_val(v):
+                        try:
+                            return int(str(v).replace(',', '').replace('+', ''))
+                        except:
+                            return 0
+
+                    all_data.append({
+                        'date': datetime.strptime(row['TRD_DD'], '%Y/%m/%d'),
+                        'financial': parse_val(row.get('TRDVAL1', '0')),
+                        'insurance': parse_val(row.get('TRDVAL2', '0')),
+                        'invest_trust': parse_val(row.get('TRDVAL3', '0')),
+                        'private': parse_val(row.get('TRDVAL4', '0')),
+                        'bank': parse_val(row.get('TRDVAL5', '0')),
+                        'other_fin': parse_val(row.get('TRDVAL6', '0')),
+                        'pension': parse_val(row.get('TRDVAL7', '0')),
+                        'corp': parse_val(row.get('TRDVAL8', '0')),
+                        'retail': parse_val(row.get('TRDVAL9', '0')),
+                        'foreign': parse_val(row.get('TRDVAL10', '0')),
+                        'other_foreign': parse_val(row.get('TRDVAL11', '0')),
+                    })
+                return all_data
+    except:
+        pass
+
+    return []
 
 
 def analyze_supply(data: list) -> dict:
@@ -608,7 +668,7 @@ with tab2:
                     elif total_pension < 0:
                         st.warning(f"연기금 7일 순매도 {fmt_num(total_pension)}")
                 else:
-                    st.info("KRX 상세 데이터 조회 실패")
+                    st.info("연기금/사모 상세 데이터 없음 (해당 종목 미지원)")
 
     st.markdown("---")
     st.caption("네이버 금융 + KRX 데이터 기반 / 참고용")
