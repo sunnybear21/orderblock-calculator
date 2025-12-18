@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-수급 추적기 - 외국인/기관 매매 현황 조회
+수급 추적기
 """
 
 import streamlit as st
@@ -10,7 +10,11 @@ import pandas as pd
 from datetime import datetime, timedelta
 import urllib.parse
 
-# pykrx 사용 (수급 데이터)
+# Font Awesome
+st.markdown("""
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+""", unsafe_allow_html=True)
+
 try:
     from pykrx import stock
     PYKRX_AVAILABLE = True
@@ -20,7 +24,6 @@ except ImportError:
 
 @st.cache_data(ttl=300)
 def search_stock_code(keyword: str) -> list:
-    """종목명으로 종목코드 검색"""
     try:
         encoded_keyword = urllib.parse.quote(keyword, encoding='euc-kr')
         url = f"https://finance.naver.com/search/searchList.naver?query={encoded_keyword}"
@@ -48,7 +51,6 @@ def search_stock_code(keyword: str) -> list:
 
 @st.cache_data(ttl=60)
 def get_stock_info_naver(stock_code: str) -> dict:
-    """네이버 금융에서 종목 정보 조회"""
     try:
         url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -78,7 +80,6 @@ def get_stock_info_naver(stock_code: str) -> dict:
 
 @st.cache_data(ttl=300)
 def get_supply_data(stock_code: str, days: int = 10) -> pd.DataFrame:
-    """pykrx로 수급 데이터 조회"""
     if not PYKRX_AVAILABLE:
         return pd.DataFrame()
 
@@ -97,7 +98,6 @@ def get_supply_data(stock_code: str, days: int = 10) -> pd.DataFrame:
 
 
 def analyze_supply(df: pd.DataFrame) -> dict:
-    """수급 분석"""
     if df is None or df.empty:
         return {'daily_data': [], 'total_foreign': 0, 'total_inst': 0, 'buy_days': 0, 'sell_days': 0}
 
@@ -132,26 +132,22 @@ def analyze_supply(df: pd.DataFrame) -> dict:
 
 
 # ============================================================
-# Streamlit UI
+# UI
 # ============================================================
 
-st.set_page_config(page_title="수급 추적기", page_icon="💰", layout="centered")
-
-st.title("💰 수급 추적기")
+st.markdown('<h1><i class="fa-solid fa-coins" style="color: #28a745;"></i> 수급 추적기</h1>', unsafe_allow_html=True)
 st.caption("외국인/기관 매매 현황 조회")
 
 if not PYKRX_AVAILABLE:
-    st.error("pykrx 모듈 필요: `pip install pykrx`")
+    st.error("pykrx 모듈 필요: pip install pykrx")
     st.stop()
 
-# 입력
 col1, col2 = st.columns([4, 1])
 with col1:
     stock_input = st.text_input("종목코드 또는 종목명", placeholder="005930 또는 삼성전자", label_visibility="collapsed")
 with col2:
     search_btn = st.button("조회", use_container_width=True)
 
-# 검색
 stock_code = None
 if stock_input and not stock_input.isdigit():
     results = search_stock_code(stock_input)
@@ -177,7 +173,6 @@ if stock_code and search_btn:
     st.markdown("---")
     st.subheader(f"{stock_info['name']} ({stock_code})")
 
-    # 현재가
     col1, col2, col3 = st.columns(3)
     col1.metric("현재가", f"{stock_info['price']:,}원", f"{stock_info['change_pct']:+.1f}%")
     col2.metric("순매수일", f"{analysis['buy_days']}일")
@@ -185,7 +180,6 @@ if stock_code and search_btn:
 
     st.markdown("---")
 
-    # 누적
     col1, col2 = st.columns(2)
     foreign_bil = analysis['total_foreign'] / 1e8
     inst_bil = analysis['total_inst'] / 1e8
@@ -195,21 +189,18 @@ if stock_code and search_btn:
 
     st.markdown("---")
 
-    # 일별 테이블
-    st.subheader("일별 현황")
+    st.markdown('<h3><i class="fa-solid fa-calendar-days" style="color: #fd7e14;"></i> 일별 현황</h3>', unsafe_allow_html=True)
 
     table_data = []
     for d in reversed(analysis['daily_data']):
         f_bil = d['foreign'] / 1e8
         i_bil = d['inst'] / 1e8
         total = d['smart_net'] / 1e8
-        signal = "🔴" if d['is_buy'] else "🔵"
         table_data.append({
             '날짜': d['date'],
             '외국인': f"{f_bil:+,.1f}억",
             '기관': f"{i_bil:+,.1f}억",
-            '합계': f"{total:+,.1f}억",
-            '': signal
+            '합계': f"{total:+,.1f}억"
         })
 
     st.dataframe(table_data, use_container_width=True, hide_index=True)
