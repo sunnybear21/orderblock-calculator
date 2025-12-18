@@ -849,7 +849,16 @@ def load_theme_data_from_sheets():
         sheet_id = "1BG_oNWSJtIgN3cYeNb5AZPsIgP__Ty-4eDgvjJwKg04"
         csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=0"
 
-        df = pd.read_csv(csv_url, encoding='utf-8')
+        # requests로 직접 다운로드 (리다이렉트 따라감)
+        import io
+        response = requests.get(csv_url, timeout=15)
+        response.raise_for_status()
+
+        # CSV 파싱
+        df = pd.read_csv(io.StringIO(response.text))
+
+        if df.empty:
+            return None, "시트에 데이터가 없습니다"
 
         # 컬럼명 정리
         df.columns = df.columns.str.strip()
@@ -857,7 +866,7 @@ def load_theme_data_from_sheets():
         # 필수 컬럼 확인
         required_cols = ['테마', '출현일수']
         if not all(col in df.columns for col in required_cols):
-            return None, "시트에 필수 컬럼이 없습니다"
+            return None, f"필수 컬럼 없음. 현재 컬럼: {list(df.columns)}"
 
         return df, None
     except Exception as e:
