@@ -235,8 +235,8 @@ def get_detailed_supply_pykrx(stock_code: str, days: int = 7) -> list:
         end_date = datetime.now().strftime('%Y%m%d')
         start_date = (datetime.now() - timedelta(days=days + 5)).strftime('%Y%m%d')
 
-        # 여러 ISIN 형식 시도
-        for suffix in ['003', '000', '001', '002', '004', '005', '006']:
+        # 여러 ISIN 형식 시도 (000~009)
+        for suffix in ['003', '000', '001', '002', '004', '005', '006', '007', '008', '009']:
             krx_code = f'KR7{stock_code}{suffix}'
 
             data = {
