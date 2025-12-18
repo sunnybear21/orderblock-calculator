@@ -863,10 +863,22 @@ def load_theme_data_from_sheets():
         # 컬럼명 정리
         df.columns = df.columns.str.strip()
 
-        # 필수 컬럼 확인
-        required_cols = ['테마', '출현일수']
+        # 필수 컬럼 확인 (영어 컬럼명)
+        required_cols = ['theme', 'days']
         if not all(col in df.columns for col in required_cols):
             return None, f"필수 컬럼 없음. 현재 컬럼: {list(df.columns)}"
+
+        # 컬럼명 한글로 변환 (표시용)
+        df = df.rename(columns={
+            'theme': '테마',
+            'days': '출현일수',
+            'max_streak': '연속일(최대)',
+            'current_streak': '현재연속',
+            'stocks': '총 종목수',
+            'volume': '거래대금(억)',
+            'leading': '주도일수',
+            'avg_change': '평균상승률'
+        })
 
         return df, None
     except Exception as e:
