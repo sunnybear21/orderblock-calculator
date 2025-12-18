@@ -854,8 +854,12 @@ def load_theme_data_from_sheets():
         response = requests.get(csv_url, timeout=15)
         response.raise_for_status()
 
+        # UTF-8로 디코딩
+        response.encoding = 'utf-8'
+        content = response.content.decode('utf-8')
+
         # CSV 파싱
-        df = pd.read_csv(io.StringIO(response.text))
+        df = pd.read_csv(io.StringIO(content))
 
         if df.empty:
             return None, "시트에 데이터가 없습니다"
