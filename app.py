@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 주식 분석 도구 - 단일 페이지 버전
+v1.1 - pykrx 수급 추적 지원
 """
 
 import streamlit as st
