@@ -888,6 +888,31 @@ def load_theme_data_from_sheets():
     except Exception as e:
         return None, str(e)
 
+
+@st.cache_data(ttl=300)  # 5분 캐시
+def load_cycle_data_from_sheets():
+    """Google Sheets에서 순환 예측 데이터 로드 (cycle 시트)"""
+    try:
+        sheet_id = "1BG_oNWSJtIgN3cYeNb5AZPsIgP__Ty-4eDgvjJwKg04"
+        # gid를 cycle 시트로 변경 (두 번째 시트)
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=cycle"
+
+        import io
+        response = requests.get(csv_url, timeout=15)
+        response.raise_for_status()
+
+        content = response.content.decode('utf-8')
+        df = pd.read_csv(io.StringIO(content))
+
+        if df.empty:
+            return None, "cycle 시트에 데이터가 없습니다"
+
+        df.columns = df.columns.str.strip()
+        return df, None
+    except Exception as e:
+        return None, str(e)
+
+
 with tab3:
     st.markdown('<h3><i class="fa-solid fa-fire" style="color: #ff6b6b;"></i> 주도 테마 분석</h3>', unsafe_allow_html=True)
     st.caption("테마별 출현 빈도, 모멘텀, 다음 주도 테마 예측")
@@ -1128,6 +1153,92 @@ with tab3:
                         use_container_width=True,
                         hide_index=True
                     )
+
+                # 8. 복귀 예상 테마 (순환 분석)
+                st.markdown("---")
+                st.markdown('<h4><i class="fa-solid fa-rotate" style="color: #e67e22;"></i> 복귀 예상 테마</h4>', unsafe_allow_html=True)
+                st.caption("휴식 후 곧 돌아올 테마 (순환 주기 분석)")
+
+                df_cycle, cycle_error = load_cycle_data_from_sheets()
+
+                if df_cycle is not None and len(df_cycle) > 0:
+                    # RETURNING 상태만 필터 (곧 돌아올 테마)
+                    returning = df_cycle[df_cycle['status'] == 'RETURNING'].head(10)
+
+                    if len(returning) > 0:
+                        # 1위 강조
+                        top1 = returning.iloc[0]
+                        st.markdown(f'''
+                        <div style="background: linear-gradient(135deg, #e67e2222, #e67e2211);
+                                    border-left: 4px solid #e67e22;
+                                    padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <h4 style="margin:0; color:#e67e22;">
+                                <i class="fa-solid fa-clock-rotate-left"></i> 복귀 임박: {top1['theme']}
+                            </h4>
+                            <p style="margin:8px 0 0 0; color:#aaa; font-size:14px;">
+                                {int(top1['expected_in'])}일 후 복귀 예상 | 평균 주기 {top1['avg_cycle']}일 | {int(top1['days_ago'])}일 전 마지막 출현
+                            </p>
+                            <p style="margin:5px 0 0 0; color:#888; font-size:12px;">
+                                대표 종목: {top1.get('top_stocks', 'N/A')}
+                            </p>
+                        </div>
+                        ''', unsafe_allow_html=True)
+
+                        # 테이블
+                        st.dataframe(
+                            returning[['theme', 'expected_in', 'avg_cycle', 'days_ago', 'appearances', 'top_stocks']].rename(columns={
+                                'theme': '테마',
+                                'expected_in': '복귀예상(일)',
+                                'avg_cycle': '평균주기',
+                                'days_ago': '경과일',
+                                'appearances': '출현횟수',
+                                'top_stocks': '대표종목'
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.info("현재 복귀 예상 테마가 없습니다.")
+
+                    # 현재 활성 테마
+                    with st.expander("현재 활성 테마 (ACTIVE)"):
+                        active = df_cycle[df_cycle['status'] == 'ACTIVE']
+                        if len(active) > 0:
+                            st.dataframe(
+                                active[['theme', 'appearances', 'avg_cycle', 'top_stocks']].rename(columns={
+                                    'theme': '테마',
+                                    'appearances': '출현횟수',
+                                    'avg_cycle': '평균주기',
+                                    'top_stocks': '대표종목'
+                                }),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        else:
+                            st.info("활성 테마 없음")
+
+                    # 휴식 중 테마
+                    with st.expander("휴식 중 테마 (RESTING)"):
+                        resting = df_cycle[df_cycle['status'] == 'RESTING'].head(20)
+                        if len(resting) > 0:
+                            st.dataframe(
+                                resting[['theme', 'days_ago', 'avg_cycle', 'expected_in', 'top_stocks']].rename(columns={
+                                    'theme': '테마',
+                                    'days_ago': '경과일',
+                                    'avg_cycle': '평균주기',
+                                    'expected_in': '복귀예상(일)',
+                                    'top_stocks': '대표종목'
+                                }),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        else:
+                            st.info("휴식 중 테마 없음")
+                else:
+                    if cycle_error:
+                        st.warning(f"순환 데이터 로드 실패: {cycle_error}")
+                    else:
+                        st.info("순환 분석 데이터가 없습니다.")
 
         except Exception as e:
             st.error(f"파일 읽기 오류: {e}")
