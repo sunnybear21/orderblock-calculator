@@ -399,7 +399,7 @@ with tab1:
     with col1:
         ob_stock_code = st.text_input("종목코드", placeholder="005930", label_visibility="collapsed", max_chars=6, key="ob_code")
     with col2:
-        ob_search_btn = st.button("분석", use_container_width=True, key="ob_btn")
+        ob_search_btn = st.button("분석", width="stretch", key="ob_btn")
 
     if ob_stock_code and ob_search_btn:
         if not re.match(r'^\d{6}$', ob_stock_code):
@@ -463,7 +463,7 @@ with tab2:
     with col1:
         supply_input = st.text_input("종목코드 또는 종목명", placeholder="005930 또는 삼성전자", label_visibility="collapsed", key="supply_input")
     with col2:
-        supply_btn = st.button("조회", use_container_width=True, key="supply_btn")
+        supply_btn = st.button("조회", width="stretch", key="supply_btn")
 
     supply_code = None
     if supply_input and not supply_input.isdigit():
@@ -760,7 +760,7 @@ with tab2:
                         '합계': t_str
                     })
 
-                st.dataframe(table_data, use_container_width=True, hide_index=True)
+                st.dataframe(table_data, width="stretch", hide_index=True)
 
                 # 연기금/사모 상세 데이터 (KRX)
                 st.markdown("---")
@@ -793,7 +793,7 @@ with tab2:
                             '금융투자': fmt_short(d['financial']),
                         })
 
-                    st.dataframe(detail_table, use_container_width=True, hide_index=True)
+                    st.dataframe(detail_table, width="stretch", hide_index=True)
 
                     # 투자자별 특성 해석
                     st.markdown("##### 투자자별 해석")
@@ -1018,7 +1018,7 @@ with tab3:
                         '평균상승률': '{:.1f}%',
                         '종합점수': '{:.1f}'
                     }),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True
                 )
 
@@ -1041,13 +1041,13 @@ with tab3:
                         showlegend=False,
                         height=300
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
                     # 상세 테이블
                     with st.expander("상세 보기"):
                         st.dataframe(
                             top_momentum[['테마', '현재연속', '출현일수', '거래대금(억)', '평균상승률']],
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
                 else:
@@ -1071,7 +1071,7 @@ with tab3:
                     showlegend=False,
                     height=300
                 )
-                st.plotly_chart(fig_vol, use_container_width=True)
+                st.plotly_chart(fig_vol, width="stretch")
 
                 # 상세 테이블
                 with st.expander("상세 보기"):
@@ -1080,7 +1080,7 @@ with tab3:
                             '거래대금(억)': '{:,.0f}',
                             '평균상승률': '{:.1f}%'
                         }),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True
                     )
 
@@ -1102,13 +1102,13 @@ with tab3:
                     showlegend=False,
                     height=300
                 )
-                st.plotly_chart(fig_freq, use_container_width=True)
+                st.plotly_chart(fig_freq, width="stretch")
 
                 # 상세 테이블
                 with st.expander("상세 보기"):
                     st.dataframe(
                         top_frequency[['테마', '출현일수', '연속일(최대)', '주도일수', '평균상승률']],
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True
                     )
 
@@ -1131,7 +1131,7 @@ with tab3:
                         showlegend=False,
                         height=300
                     )
-                    st.plotly_chart(fig_lead, use_container_width=True)
+                    st.plotly_chart(fig_lead, width="stretch")
 
                     # 상세 테이블
                     with st.expander("상세 보기"):
@@ -1140,7 +1140,7 @@ with tab3:
                                 '주도력': '{:.1f}%',
                                 '평균상승률': '{:.1f}%'
                             }),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
                 else:
@@ -1165,7 +1165,7 @@ with tab3:
                         showlegend=False,
                         height=300
                     )
-                    st.plotly_chart(fig_ret, use_container_width=True)
+                    st.plotly_chart(fig_ret, width="stretch")
 
                     # 상세 테이블
                     with st.expander("상세 보기"):
@@ -1174,7 +1174,7 @@ with tab3:
                                 '평균상승률': '{:.1f}%',
                                 '거래대금(억)': '{:,.0f}'
                             }),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
                 else:
@@ -1191,7 +1191,7 @@ with tab3:
                             '평균상승률': '{:.1f}%',
                             '종합점수': '{:.1f}'
                         }),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True
                     )
 
@@ -1235,7 +1235,7 @@ with tab3:
                                 'appearances': '출현횟수',
                                 'top_stocks': '대표종목'
                             }),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
                     else:
@@ -1252,7 +1252,7 @@ with tab3:
                                     'avg_cycle': '평균주기',
                                     'top_stocks': '대표종목'
                                 }),
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True
                             )
                         else:
@@ -1270,7 +1270,7 @@ with tab3:
                                     'expected_in': '복귀예상(일)',
                                     'top_stocks': '대표종목'
                                 }),
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True
                             )
                         else:
